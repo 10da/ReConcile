@@ -11,10 +11,10 @@ from tqdm import tqdm
 from data_utils import StrategyQA, GSM8k, Aqua, ECQA
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
 
+    parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', default='SQA', type=str)
-    parser.add_argument('--num_samples', default=100, type=int)
+    parser.add_argument('--num_samples', default=1, type=int)
     parser.add_argument('--round', default=2, type=int)
     args = parser.parse_args()
 
@@ -41,30 +41,30 @@ if __name__ == '__main__':
 
     # Phase1: Initial Response Generation
 
-    claude_result = []
-    while True:
-        for test_sample in tqdm(test_samples[len(claude_result):]):
-            tmp = {}
-            tmp['gold_answer'] = test_sample['answer']
-            try:
-                result = claude.claude_gen_ans(test_sample,
-                                            convincing_samples=convincing_gpt+convincing_bard,
-                                            additional_instruc=None,
-                                            intervene=False,
-                                            dataset=args.dataset)
-            except ValueError:
-                print("cannot generate valid response for this sample.")
-                result = invalid_result(args.dataset)
-            if result == 403:
-                pause = input("rate limit: let's take a break. enter anything to resume: ")
-                if pause: break
+    claude_result = [] #[{['gold_answer'],['prediction']}, ...]
+    
+    for test_sample in tqdm(test_samples[len(claude_result):]):
+        tmp = {}
+        tmp['gold_answer'] = test_sample['answer']
+        try:
+            result = claude.claude_gen_ans(test_sample,
+                                        convincing_samples=convincing_gpt+convincing_bard,
+                                        additional_instruc=None,
+                                        intervene=False,
+                                        dataset=args.dataset) #generation.pyより
+        except ValueError:
+            print("cannot generate valid response for this sample.")
+            result = invalid_result(args.dataset)
+        if result == 403:
+            pause = input("rate limit: let's take a break. enter anything to resume: ")
+            if pause: break
 
-            tmp['prediction'] = result
-            claude_result.append(tmp)
-            time.sleep(1)
-        break
+        tmp['prediction'] = result
+        claude_result.append(tmp)
+        time.sleep(1)
+        
 
-    gpt_result = []
+    gpt_result = [] #[{['gold_answer'],['prediction']}, ...]
     for test_sample in tqdm(test_samples[len(gpt_result):]):
         tmp = {}
         tmp['gold_answer'] = test_sample['answer']
@@ -81,7 +81,7 @@ if __name__ == '__main__':
         gpt_result.append(tmp)
         time.sleep(1)
    
-    bard_result = []
+    bard_result = [] #[{['gold_answer'],['prediction']}, ...]
     for test_sample in tqdm(test_samples[len(bard_result):]):
         tmp = {}
         tmp['gold_answer'] = test_sample['answer']
@@ -94,7 +94,6 @@ if __name__ == '__main__':
             tmp['prediction'] = result
         except ValueError:
             tmp['prediction'] = invalid_result(args.dataset)
-        
         bard_result.append(tmp)
         time.sleep(1)
 
@@ -112,6 +111,8 @@ if __name__ == '__main__':
     all_results = clean_output(all_results, 0, dataset=args.dataset)
     all_results = parse_output(all_results, 0)
     print(f"Initial Round Performance: {evaluate_all(all_results, 0)}")
+
+    print(all_results) # <-- check the shape of list (10/16)
 
     # Phase2: Multi-Round Discussion
 

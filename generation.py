@@ -6,24 +6,23 @@ from dotenv import load_dotenv
 from utils import prepare_context, prepare_context_for_chat_assistant, prepare_context_for_bard, parse_json, invalid_result
 
 import openai
+from openai.error import RateLimitError, APIError, ServiceUnavailableError, APIConnectionError, InvalidRequestError
+openai.api_key = os.environ['OPENAI_API_KEY']
 from claude import Client
+claude_coockies = [c for c in [os.environ['CLAUDE_COOCKIE1'], 
+                               os.environ['CLAUDE_COOCKIE2'], 
+                               os.environ['CLAUDE_COOCKIE3'], 
+                               os.environ['CLAUDE_COOCKIE4']] if c]
+
 import google.generativeai as palm
+from google.api_core.exceptions import ServiceUnavailable
+palm.configure(api_key=os.environ['PALM_API_KEY'])
 
 from curl_cffi import CurlError
 from json import JSONDecodeError
 from requests.exceptions import RequestException
-from google.api_core.exceptions import ServiceUnavailable
-from openai.error import RateLimitError, APIError, ServiceUnavailableError, APIConnectionError, InvalidRequestError
 
 load_dotenv()
-
-openai.api_type = "azure"
-openai.api_base = os.environ['OPEN_AI_API_BASE']
-openai.api_version = os.environ['OPEN_AI_API_VERSION']
-openai.api_key = os.environ['OPEN_AI_API_KEY']
-palm.configure(api_key=os.environ['PALM_API_KEY'])
-# Note: you can add more account in .env and here
-claude_coockies = [c for c in [os.environ['CLAUDE_COOCKIE1'], os.environ['CLAUDE_COOCKIE2'], os.environ['CLAUDE_COOCKIE3'], os.environ['CLAUDE_COOCKIE4'], os.environ['CLAUDE_COOCKIE5']] if c]
 
 class ClaudeModel:
     def __init__(self):
@@ -117,7 +116,7 @@ def gpt_gen_ans(sample, convincing_samples=None, additional_instruc=None, interv
     contexts = prepare_context_for_chat_assistant(sample, convincing_samples, intervene, dataset)
     if additional_instruc:
         contexts[-1]['content'] += " ".join(additional_instruc)
-    # print(contexts)
+    
     completion = openai.ChatCompletion.create(
               engine="gpt-35-turbo",
               messages=contexts)
@@ -228,4 +227,3 @@ def bard_transform_json(model_output, dataset):
     
     response = palm.chat(messages=prompt)
     return response.last
-
