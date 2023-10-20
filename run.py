@@ -14,7 +14,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', default='SQA', type=str)
-    parser.add_argument('--num_samples', default=1, type=int)
+    parser.add_argument('--num_samples', default=1, type=int) # smaple_num
     parser.add_argument('--round', default=2, type=int)
     args = parser.parse_args()
 
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     elif args.dataset == "Aqua":
         data = Aqua(data_dir=f'./dataset/{args.dataset}')
 
-    test_samples = data.get_test_samples()[:args.num_samples]
+    test_samples = data.get_test_samples()[9:11] #[:args.num_samples]
     print(f"Number of test samples={len(test_samples)}")
 
     with open(f'convincing/{args.dataset}/chatgpt.json', 'r') as f:
@@ -109,36 +109,48 @@ if __name__ == '__main__':
         all_results.append(tmp)
 
     all_results = clean_output(all_results, 0, dataset=args.dataset)
-    all_results = parse_output(all_results, 0)
+    all_results, early_stop = parse_output(all_results, 0)
     print(f"Initial Round Performance: {evaluate_all(all_results, 0)}")
 
-    print(all_results) # <-- check the shape of list (10/16)
-
+    early_stop_list = [early_stop]
+    
     # Phase2: Multi-Round Discussion
 
     for r in range(1, args.round+1):
+        print(early_stop_list)
+        print(all_results)
         print(f"----- Round {r} Discussion -----")
         all_results = claude.claude_debate(test_samples,
                                         all_results,
                                         rounds=r,
                                         convincing_samples=convincing_gpt+convincing_bard,
-                                        dataset=args.dataset)
+                                        dataset=args.dataset,
+                                        early_stop = early_stop_list[-1])
+        all_results = clean_output(all_results, r, dataset=args.dataset)
+        all_results, early_stop = parse_output(all_results, r)
+        early_stop_list.append(early_stop)
 
         all_results = gpt_debate(test_samples,
                             all_results,
                             rounds=r,
                             convincing_samples=convincing_claude+convincing_bard,
-                            dataset=args.dataset)
+                            dataset=args.dataset,
+                            early_stop = early_stop_list[-1])
+        all_results = clean_output(all_results, r, dataset=args.dataset)
+        all_results, early_stop = parse_output(all_results, r)
+        early_stop_list.append(early_stop)
 
         all_results = bard_debate(test_samples,
                             all_results,
                             rounds=r,
                             convincing_samples=convincing_claude+convincing_gpt,
-                            dataset=args.dataset)
-
+                            dataset=args.dataset,
+                            early_stop = early_stop_list[-1])
         all_results = clean_output(all_results, r, dataset=args.dataset)
-        all_results = parse_output(all_results, r)
+        all_results, early_stop = parse_output(all_results, r)
+        early_stop_list.append(early_stop)
+
         print(f"Round {r} Performance: {evaluate_all(all_results, r)}")
 
-    with open(f'{args.dataset}_round_{args.round}.pkl', 'wb') as f:
-        pickle.dump(all_results, f)
+    #with open(f'{args.dataset}_round_{args.round}.pkl', 'wb') as f:
+        #pickle.dump(all_results, f)

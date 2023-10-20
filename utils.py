@@ -152,12 +152,24 @@ def trans_confidence(x):
 
 def parse_output(all_results, rounds):
     c, g, b = "claude", "gpt3", "bard"
-    r = "_output_"+str(rounds)
+
+    early_stop = [False]*(len(all_results))
     
-    for i in all_results:
+    for n, i in enumerate(all_results):
         certainty_vote = {}
-            
+
+        latest_round = {}
         for o in [c, g, b]:
+            num = rounds
+            while(num >= 0):
+                if o + "_output_" + str(num) in i:
+                    latest_round[o] = str(num)
+                    num = -1
+                else:
+                    num = num - 1
+                
+        for o in [c, g, b]:
+            r =  "_output_"+latest_round[o]
             if o+r in i:
                 i[o+"_pred_"+str(rounds)] = i[o+r]['answer']
                 i[o+"_exp_"+str(rounds)] = f"I think the answer is {i[o+r]['answer']} because {i[o+r]['reasoning']} My confidence level is {i[o+r]['confidence_level']}." 
@@ -165,24 +177,26 @@ def parse_output(all_results, rounds):
                     certainty_vote[i[o+r]['answer']] = trans_confidence(i[o+r]['confidence_level']) + 1e-5
                 else:
                     certainty_vote[i[o+r]['answer']] += trans_confidence(i[o+r]['confidence_level'])
-        if c+r in i and g+r in i and b+r in i:
-            i['vote_'+str(rounds)] = [i['claude_pred_'+str(rounds)], i['gpt3_pred_'+str(rounds)], i['bard_pred_'+str(rounds)]]
-            i['exps_'+str(rounds)] = [i['claude_exp_'+str(rounds)], i['gpt3_exp_'+str(rounds)], i['bard_exp_'+str(rounds)]]
-            i['weighted_vote_'+str(rounds)] = certainty_vote
-            i['weighted_max_'+str(rounds)] = max(certainty_vote, key=certainty_vote.get)
+        
+        i['vote_'+str(rounds)] = [i['claude_pred_'+latest_round["claude"]], i['gpt3_pred_'+latest_round["gpt3"]], i['bard_pred_'+latest_round["bard"]]]
+        i['exps_'+str(rounds)] = [i['claude_exp_'+latest_round["claude"]], i['gpt3_exp_'+latest_round["gpt3"]], i['bard_exp_'+latest_round["bard"]]]
+        i['weighted_vote_'+str(rounds)] = certainty_vote
+        i['weighted_max_'+str(rounds)] = max(certainty_vote, key=certainty_vote.get)
 
-            i['debate_prompt_'+str(rounds)] = ''
-            vote = Counter(i['vote_'+str(rounds)]).most_common(2)
-            i['majority_ans_'+str(rounds)] = vote[0][0]
-            if len(vote) > 1: # not all the agents give the same answer
-                for v in vote:
-                    i['debate_prompt_'+str(rounds)] += f"There are {v[1]} agents think the answer is {v[0]}. "
-                    exp_index = find_idx_by_element(i['vote_'+str(rounds)], v[0])
-                    group_exp = find_element_by_indices(i['exps_'+str(rounds)], exp_index)
-                    exp = "\n".join(["One agent solution: " + g for g in group_exp])
-                    i['debate_prompt_'+str(rounds)] += exp + "\n\n"
+        i['debate_prompt'] = ''
+        vote = Counter(i['vote_'+str(rounds)]).most_common(2)
+        i['majority_ans_'+str(rounds)] = vote[0][0]
+        if len(vote) > 1: # not all the agents give the same answer
+            for v in vote:
+                i['debate_prompt'] += f"There are {v[1]} agents think the answer is {v[0]}. "
+                exp_index = find_idx_by_element(i['vote_'+str(rounds)], v[0])
+                group_exp = find_element_by_indices(i['exps_'+str(rounds)], exp_index)
+                exp = "\n".join(["One agent solution: " + g for g in group_exp])
+                i['debate_prompt'] += exp + "\n\n"
+        else:
+            early_stop[n] = True
                     
-    return all_results
+    return all_results, early_stop
 
 def evaluate_single_model(results):
     num_correct = 0
@@ -192,8 +206,22 @@ def evaluate_single_model(results):
     return num_correct / len(results)
 
 def clean_output(all_results, rounds, dataset):
-    co, go, bo = "claude_output_" + str(rounds), 'gpt3_output_' + str(rounds), 'bard_output_' + str(rounds)
     for i in all_results:
+        if "claude_output_" + str(rounds) in i:
+            co = "claude_output_" + str(rounds)
+        else:
+            co = "claude_output_" + str(rounds-1)
+
+        if "gpt3_output_" + str(rounds) in i:
+            go = "gpt3_output_" + str(rounds)
+        else:
+            go = "gpt3_output_" + str(rounds-1)
+
+        if "bard_output_" + str(rounds) in i:
+            bo = "bard_output_" + str(rounds)
+        else:
+            bo = "bard_output_" + str(rounds-1)
+        
         for o in [co, go, bo]:
             if o in i:
                     

@@ -86,14 +86,14 @@ class ClaudeModel:
       
         return result
 
-    def claude_debate(self, test_samples, all_results, rounds, convincing_samples, dataset):
+    def claude_debate(self, test_samples, all_results, rounds, convincing_samples, dataset, early_stop):
         r = '_' + str(rounds-1)
         result = None
         for i, s in tqdm(enumerate(all_results)):
-            if 'claude_output_'+str(rounds) not in s and 'debate_prompt'+ r in s and len(s['debate_prompt'+r]):
+            if 'claude_output_'+str(rounds) not in s and 'debate_prompt' in s and len(s['debate_prompt']) and not early_stop[i]:
                 additional_instruc = ["\n\nCarefully review the following solutions from other agents as additional information, and provide your own answer and step-by-step reasoning to the question."]
                 additional_instruc.append("Clearly states that which pointview do you agree or disagree and why.\n\n")
-                additional_instruc.append(s['debate_prompt'+r])
+                additional_instruc.append(s['debate_prompt'])
                 additional_instruc.append("Output your answer in json format, with the format as follows: {\"reasoning\": \"\", \"answer\": \"\", \"confidence_level\": \"\"}. Please strictly output in JSON format.")
                 try:
                     result = self.claude_gen_ans(test_samples[i],
@@ -118,7 +118,7 @@ def gpt_gen_ans(sample, convincing_samples=None, additional_instruc=None, interv
         contexts[-1]['content'] += " ".join(additional_instruc)
     
     completion = openai.ChatCompletion.create(
-              engine="gpt-35-turbo",
+              model="gpt-3.5-turbo",
               messages=contexts)
     
     output = completion['choices'][0]['message']['content']
@@ -173,13 +173,15 @@ def bard_gen_ans(sample, convincing_samples=None, additional_instruc=None, inter
         result['answer'] = str(result['answer'])
     return result
 
-def gpt_debate(test_samples, all_results, rounds, convincing_samples, dataset):
+def gpt_debate(test_samples, all_results, rounds, convincing_samples, dataset, early_stop):
     r = '_' + str(rounds-1)
     for i, s in tqdm(enumerate(all_results)):
-        if 'gpt3_output_'+str(rounds) not in s and 'debate_prompt'+ r in s and len(s['debate_prompt'+r]):
+        if 'gpt3_output_'+str(rounds) not in s and 'debate_prompt' in s and len(s['debate_prompt']) and not early_stop[i]:
+        #if 'gpt3_output_'+str(rounds) not in s and 'debate_prompt'+ r in s and len(s['debate_prompt'+r]):
             additional_instruc = ["\n\nCarefully review the following solutions from other agents as additional information, and provide your own answer and step-by-step reasoning to the question."]
             additional_instruc.append("Clearly states that which pointview do you agree or disagree and why.\n\n")
-            additional_instruc.append(s['debate_prompt'+r])
+            additional_instruc.append(s['debate_prompt'])
+            #additional_instruc.append(s['debate_prompt'+r])
             additional_instruc.append("Output your answer in json format, with the format as follows: {\"reasoning\": \"\", \"answer\": \"\", \"confidence_level\": \"\"}. Please strictly output in JSON format.")
             result = gpt_gen_ans(test_samples[i],
                                  convincing_samples=convincing_samples,
@@ -189,13 +191,15 @@ def gpt_debate(test_samples, all_results, rounds, convincing_samples, dataset):
             s['gpt3_output_'+str(rounds)] = result
     return all_results
 
-def bard_debate(test_samples, all_results, rounds, convincing_samples, dataset):
+def bard_debate(test_samples, all_results, rounds, convincing_samples, dataset, early_stop):
     r = '_' + str(rounds-1)
     for i, s in tqdm(enumerate(all_results)):
-        if 'bard_output_'+str(rounds) not in s and 'debate_prompt'+ r in s and len(s['debate_prompt'+r]):
+        if 'bard_output_'+str(rounds) not in s and 'debate_prompt' in s and len(s['debate_prompt']) and not not early_stop[i]:
+        #if 'bard_output_'+str(rounds) not in s and 'debate_prompt' in s and len(s['debate_prompt'+r]):
             additional_instruc = ["\n\nCarefully review the following solutions from other agents as additional information, and provide your own answer and step-by-step reasoning to the question."]
             additional_instruc.append("Clearly states that which pointview do you agree or disagree and why.\n\n")
-            additional_instruc.append(s['debate_prompt'+r])
+            additional_instruc.append(s['debate_prompt'])
+            #additional_instruc.append(s['debate_prompt'+r])
             additional_instruc.append("Output your answer in json format, with the format as follows: {\"reasoning\": \"\", \"answer\": \"\", \"confidence_level\": \"\"}. Please strictly output in JSON format.")
             try:
                 result = bard_gen_ans(test_samples[i],
